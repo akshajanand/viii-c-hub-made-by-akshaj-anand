@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Class VIII-C Hub | Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/dist/umd/supabase.min.js"></script>
+<style>
+:root {
+  --accent: #007bff; --accent-light: #e6f2ff;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --radius: 8px; --bg: #f7f8fa; --surface: #ffffff; --border: #e5e7eb;
+  --text-primary: #111827; --text-secondary: #4b5563; --text-muted: #6b7280;
+}
+:root.dark {
+  --accent-light: rgba(0, 123, 255, 0.1); --bg: #111827; --surface: #1f2937;
+  --border: #374151; --text-primary: #f9fafb; --text-secondary: #d1d5db; --text-muted: #9ca3af;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans); background-color: var(--bg); color: var(--text-primary);
+  display: grid; grid-template-columns: 240px 1fr; grid-template-rows: 70px 1fr;
+  grid-template-areas: "sidebar header" "sidebar main"; min-height: 100vh;
+}
+/* Mobile Navigation */
+.mobile-nav-toggle { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; }
+.mobile-nav-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+.mobile-nav-overlay.show { opacity: 1; pointer-events: auto; }
+
+@media (max-width: 1024px) {
+  body { grid-template-columns: 1fr; grid-template-areas: "header" "main"; }
+  
+  aside { 
+    position: fixed; left: -280px; top: 0; width: 280px; height: 100vh; z-index: 60; 
+    transition: left 0.3s ease; background: var(--surface); border-right: 1px solid var(--border);
+  }
+  aside.show { left: 0; }
+  
+  main { padding: 1rem; }
+  .mobile-nav-toggle { display: block; }
+  
+  /* Better mobile form handling */
+  .modal { width: 95%; max-width: none; }
+  input, textarea, select { font-size: 16px; } /* Prevents zoom on iOS */
+  
+  /* Mobile-friendly buttons */
+  .btn { padding: 0.75rem 1rem; font-size: 1rem; min-height: 44px; }
+  
+  /* Touch-friendly file attachments */
+  .file-link { padding: 0.75rem 1rem; }
+  
+  /* Better mobile chat */
+  .ai-message { max-width: 95%; }
+  #aiPromptInput { min-height: 50px; font-size: 16px; }
+  
+  /* Mobile timetable */
+  .timetable-grid { font-size: 0.8rem; gap: 0.25rem; }
+  .tcell { padding: 0.5rem; min-height: 40px; }
+  
+  /* Widget improvements */
+  .widget-grid { grid-template-columns: 1fr; }
+  .widget { padding: 1rem; }
+  
+  /* Header improvements */
+  .header-right { gap: 0.5rem; }
+  #controlsWrapper select, #controlsWrapper input { width: auto; min-width: 120px; }
+}
+aside {
+  grid-area: sidebar; position: sticky; top: 0; height: 100vh;
+  background-color: var(--surface); border-right: 1px solid var(--border);
+  padding: 1.5rem; display: flex; flex-direction: column;
+}
+.brand { font-size: 1.25rem; font-weight: 700; margin-bottom: 2rem; }
+.brand span { font-size: 0.9rem; color: var(--text-muted); font-weight: 400; display: block; }
+.nav { display: flex; flex-direction: column; gap: 0.5rem; }
+.nav .tab {
+  padding: 0.75rem 1rem; border-radius: var(--radius); cursor: pointer; font-weight: 500;
+  transition: all 0.2s ease; color: var(--text-secondary); display: flex; align-items: center; gap: 0.75rem;
+}
+.nav .tab:hover { background-color: var(--bg); color: var(--text-primary); }
+.nav .tab.active { background-color: var(--accent-light); color: var(--accent); font-weight: 600; }
+.sidebar-footer { margin-top: auto; font-size: 0.8rem; color: var(--text-muted); }
+header {
+  grid-area: header; display: flex; align-items: center; padding: 0 1.5rem;
+  background-color: var(--surface); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 10;
+}
+.header-title { font-size: 1.5rem; font-weight: 700; }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
+#currentDate { color: var(--text-muted); font-size: 0.9rem; }
+main {
+  grid-area: main; padding: 2rem; max-width: 1100px; width: 100%; margin: 0 auto; overflow-y: auto;
+}
+.listView { display: grid; gap: 1.5rem; }
+.empty, .loading { text-align: center; color: var(--text-muted); padding: 3rem 0; }
+.widget-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+.widget { background-color: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; }
+.widget-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem; }
+.widget-content { display: flex; flex-direction: column; gap: 1rem; }
+.homework-item, .announcement-item { padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.homework-item:last-child, .announcement-item:last-child { border-bottom: none; padding-bottom: 0; }
+.item-title { font-weight: 600; }
+.item-due-date { font-size: 0.875rem; color: var(--accent); }
+.item-meta { font-size: 0.875rem; color: var(--text-muted); }
+#aiView { display: none; height: calc(100vh - 70px - 4rem); flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;}
+.ai-chat-history { flex-grow: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 1.5rem; background-color: var(--bg);}
+.ai-message { display: flex; gap: 1rem; max-width: 90%; }
+.ai-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; }
+.ai-message.user { align-self: flex-end; flex-direction: row-reverse; }
+.ai-message.user .ai-avatar { background-color: var(--accent-light); color: var(--accent); }
+.ai-message.model { align-self: flex-start; }
+.ai-message.model .ai-avatar { background-color: var(--surface); border: 1px solid var(--border); }
+.ai-message-content { padding-top: 0.25rem; word-wrap: break-word; line-height: 1.6; }
+.ai-message-content p { margin-bottom: 1rem; }
+.ai-message-content pre { background-color: var(--bg); padding: 1rem; border-radius: var(--radius); white-space: pre-wrap; word-wrap: break-word; font-family: monospace; font-size: 0.9em; }
+.ai-prompt-form { display: flex; gap: 1rem; padding: 1rem; border-top: 1px solid var(--border); background-color: var(--surface); }
+#aiPromptInput { flex-grow: 1; resize: none; height: 44px; }
+#aiSubmitBtn { height: 44px; }
+.loading-indicator { display: flex; align-items: center; gap: 0.5rem; animation: pulse 1.5s infinite ease-in-out; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; position: relative; }
+.card-header .name { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem; }
+.card-header .meta { font-size: 0.875rem; color: var(--text-muted); }
+.card-content { margin: 1rem 0; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; }
+.delete-btn { position: absolute; top: 1rem; right: 1rem; background: transparent; color: var(--text-muted); border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; display: none; place-items: center; }
+.delete-btn:hover { color: #dc3545; background-color: var(--bg); }
+.delete-btn.show { display: grid; }
+.file-list { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; margin-top: 1rem; }
+.file-attachment { display: flex; align-items: center; gap: 0.5rem; }
+.file-link { color: var(--accent); text-decoration: none; font-size: 0.9rem; font-weight: 500; padding: 0.5rem 0.75rem; border-radius: var(--radius); background-color: var(--accent-light); }
+.file-link:hover { text-decoration: underline; }
+.file-delete-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: none; font-size: 1.2rem; }
+.file-delete-btn:hover { color: #dc3545; }
+.file-delete-btn.show { display: inline-block; }
+.timetable-wrapper { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; }
+.timetable-grid { display: grid; grid-template-columns: 120px repeat(6, 1fr); gap: 0.5rem; }
+.thead .tcell { font-weight: 600; }
+.tcell { background: var(--bg); border-radius: var(--radius); padding: 0.75rem; min-height: 44px; display: flex; align-items: center; font-size: 0.9rem; }
+.tcell input { width:100%; background:transparent; border:none; outline:none; font:inherit; color:inherit; }
+.tcontrols { display: flex; justify-content: flex-end; margin-top: 1.5rem; }
+.btn { font-family: var(--font-sans); font-weight: 600; border: 1px solid var(--accent); cursor: pointer; padding: 0.625rem 1.25rem; border-radius: var(--radius); background-color: var(--accent); color: white; font-size: 0.9rem; transition: all 0.2s ease; }
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.ghost { background-color: var(--surface); color: var(--text-primary); border-color: var(--border); }
+.btn.ghost:hover { border-color: var(--accent); color: var(--accent); }
+input, select, textarea { font-family: var(--font-sans); padding: 0.625rem 0.875rem; border-radius: var(--radius); border: 1px solid var(--border); background-color: var(--bg); color: var(--text-primary); font-size: 1rem; width: 100%; }
+input[type="date"] { color-scheme: dark; }
+:root:not(.dark) input[type="date"] { color-scheme: light; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+textarea { min-height: 120px; resize: vertical; }
+#unlockPanel { display: none; gap: 0.5rem; align-items: center; }
+#unlockPanel.show { display: flex; }
+.modal-overlay { position: fixed; inset: 0; background-color: rgba(0,0,0,0.5); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+.modal { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(0.95); opacity: 0; z-index: 101; background: var(--surface); border-radius: var(--radius); padding: 1.5rem; transition: all 0.3s ease; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+.modal.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.modal.show + .modal-overlay { opacity: 1; pointer-events: auto; }
+.modal-content { display: flex; flex-direction: column; gap: 1rem; }
+.modal-title { font-size: 1.25rem; font-weight: 600; text-align: center; margin-bottom: 0.5rem; }
+.form-group { display: block; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: -100px; z-index: 200; max-width: 500px; width: calc(100% - 2rem); transition: bottom 0.5s ease; background-color: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: var(--radius); padding: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-weight: 500; }
+.toast.show { bottom: 1.5rem; }
+.toast.ok { border-left-color: #28a745; }
+.toast.err { border-left-color: #dc3545; }
+.toast.warn { border-left-color: #ffc107; }
+</style>
+</head>
+<body>
+  <aside>
+    <div class="brand">Class VIII-C<span>Digital Hub</span></div>
+    <nav class="nav">
+      <div class="tab active" id="dashboardTab">✨ Dashboard</div>
+      <div class="tab" id="notesTab">📝 Notes</div>
+      <div class="tab" id="homeworkTab">📚 Homework</div>
+      <div class="tab" id="announcementsTab">📢 Announcements</div>
+      <div class="tab" id="timetableTab">🗓️ Timetable</div>
+      <div class="tab" id="aiTab">🤖 AI Assistant</div>
+    </nav>
+    <div class="sidebar-footer">
+        <p>&copy; 2025 Akshaj Anand</p>
+    </div>
+  </aside>
+
+  <header>
+    <button class="mobile-nav-toggle" id="mobileNavToggle">☰</button>
+    <h1 class="header-title" id="pageTitle">Dashboard</h1>
+    <div class="header-right">
+      <div id="currentDate"></div>
+      <div id="controlsWrapper" style="display:none;">
+        <select id="sortSelect">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="subject">Subject</option>
+        </select>
+        <input type="text" id="filterInput" placeholder="Filter..." style="width:200px;" />
+      </div>
+      <button class="btn" id="newEntryBtn" style="display:none;">New Entry</button>
+      <button class="btn ghost" id="unlockBtn">Admin</button>
+      <div id="unlockPanel">
+          <input id="unlockPw" type="password" placeholder="Password" />
+          <button id="unlockConfirm" class="btn">Login</button>
+      </div>
+      <button id="themeToggle" title="Toggle dark mode">🌓</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="dashboardView">
+        <div class="widget-grid">
+            <div class="widget">
+                <h2 class="widget-title">Upcoming Deadlines</h2>
+                <div class="widget-content" id="homeworkWidget"></div>
+            </div>
+            <div class="widget">
+                <h2 class="widget-title">Latest Announcement</h2>
+                <div class="widget-content" id="announcementWidget"></div>
+            </div>
+        </div>
+    </div>
+    <div id="listView" class="listView" style="display:none;"></div>
+    <div id="empty" class="empty" style="display:none;">No entries to display.</div>
+    <div id="loading" class="loading" style="display:none;">Loading...</div>
+    <div id="timetableView" style="display:none;">
+      <div class="timetable-wrapper">
+        <div class="timetable-grid thead" id="timetableHeader">
+            <div class="tcell">Day</div>
+            <div class="tcell">Period 1</div><div class="tcell">Period 2</div><div class="tcell">Period 3</div>
+            <div class="tcell">Period 4</div><div class="tcell">Period 5</div><div class="tcell">Period 6</div>
+        </div>
+        <div id="ttRows"></div>
+        <div class="tcontrols">
+          <button class="btn" id="saveTTBtn" disabled>Save Changes</button>
+        </div>
+      </div>
+    </div>
+    <div id="aiView" style="display:none;">
+        <div class="ai-chat-history" id="aiChatHistory"></div>
+        <form class="ai-prompt-form" id="aiPromptForm">
+            <textarea id="aiPromptInput" placeholder="Ask a study question..." required></textarea>
+            <button type="submit" id="aiSubmitBtn" class="btn">Send</button>
+        </form>
+    </div>
+  </main>
+
+  <div class="modal" id="sheet">
+    <div class="modal-content">
+      <h2 class="modal-title" id="sheetTitle">New Entry</h2>
+      <form id="itemForm">
+        <div id="formGroupsContainer" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div class="form-group" id="uploaderGroup"><label>Your Name</label><input id="uploader" type="text" required></div>
+          <div class="form-group" id="subjectGroup"><label>Subject</label><input id="subject" type="text"></div>
+          <div class="form-group" id="postTextGroup"><label>Description</label><textarea id="postText"></textarea></div>
+          <div class="form-group" id="dueDateGroup"><label>Due Date</label><input id="dueDate" type="date"></div>
+          <div class="form-group" id="announcementTextGroup"><label>Announcement</label><textarea id="announcementText"></textarea></div>
+          <div class="form-group" id="fileInputGroup">
+              <input id="file" type="file" multiple style="display:none;">
+              <button type="button" class="btn ghost" id="fileSelectBtn">Attach Files</button>
+              <div id="fileListPreview" style="font-size: 0.9rem; color: var(--text-muted); margin-top: 0.5rem;"></div>
+          </div>
+          <div class="form-group" id="passwordGroup"><label>Administrator Password</label><input id="password" type="password"></div>
+        </div>
+      </form>
+      <div id="sheetMsg" style="display:none; color: #dc3545; font-size: 0.9rem;"></div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem;">
+        <button type="button" class="btn ghost" id="cancelBtn">Cancel</button>
+        <button type="button" class="btn" id="uploadBtn">Submit</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal-overlay"></div>
+  <div class="mobile-nav-overlay" id="mobileNavOverlay"></div>
+  <div id="toast" class="toast"></div>
+
+<script type="module">
+  // ========= CONFIG =========
+  const SUPABASE_URL = "https://dzlejyetwcevmikfqilx.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6bGVqeWV0d2Nldm1pa2ZxaWx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUyNjY0ODAsImV4cCI6MjA3MDg0MjQ4MH0.YsYdEwCH_jyrJs0iTVn0jXOfKYGPA8lpOUoBotBRYYk";
+  const PASSWORD = "gurukul@123";
+  const GROQ_API_KEY = "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"; // Replace with your Groq API key
+
+  // ========= INITIALIZATION =========
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // ========= STATE =========
+  let currentTab = "dashboard";
+  let filesToUpload = [];
+  let adminUnlocked = false;
+  let aiInitialized = false;
+  
+  // ========= DOM ELEMENTS =========
+  const DOM = {};
+  
+  // ========= HELPERS =========
+  function showToast(message, kind = "info", timeout = 3000) {
+    DOM.toast.textContent = message;
+    DOM.toast.className = `toast show ${kind}`;
+    setTimeout(() => { DOM.toast.className = "toast"; }, timeout);
+  }
+  
+  function escapeHtml(s) { 
+    return (s || "").replace(/[&<>"']/g, m => ({ 
+      "&": "&amp;", 
+      "<": "&lt;", 
+      ">": "&gt;", 
+      '"': "&#34;", 
+      "'": "&#39;" 
+    }[m])); 
+  }
+
+  // ========= NAVIGATION =========
+  function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.nav .tab').forEach(t => t.classList.remove("active"));
+    const activeTabEl = document.getElementById(`${tab}Tab`);
+    if(activeTabEl) activeTabEl.classList.add("active");
+    DOM.pageTitle.textContent = activeTabEl.textContent.trim().substring(2);
+
+    const allViews = [DOM.dashboardView, DOM.listView, DOM.empty, DOM.loading, DOM.timetableView, DOM.aiView];
+    allViews.forEach(v => { if (v) v.style.display = 'none'; });
+    
+    const showControls = ['notes', 'homework', 'announcements'].includes(tab);
+    DOM.controlsWrapper.style.display = showControls ? 'flex' : 'none';
+    DOM.newEntryBtn.style.display = ['timetable', 'dashboard', 'ai'].includes(tab) ? 'none' : 'block';
+
+    if (tab === "dashboard") {
+        DOM.dashboardView.style.display = 'block';
+        loadDashboard();
+    } else if (tab === "timetable") {
+        DOM.timetableView.style.display = 'block';
+        loadTimetable();
+    } else if (tab === "ai") {
+        DOM.aiView.style.display = 'flex';
+        initializeAI();
+    } else {
+        DOM.listView.style.display = 'grid';
+        loadItems();
+    }
+  }
+  
+  // ========= AI LOGIC WITH GROQ =========
+  async function initializeAI() {
+    if (aiInitialized) return true;
+    
+    if (!GROQ_API_KEY || GROQ_API_KEY === "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") {
+        DOM.aiChatHistory.innerHTML = `<div class="empty">
+          <p>🤖 AI Assistant Setup Required</p>
+          <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-muted);">
+            To enable the AI Assistant, you need to:
+            <br>1. Go to <a href="https://console.groq.com/keys" target="_blank" style="color: var(--accent);">Groq Console</a>
+            <br>2. Create an account (free tier available)
+            <br>3. Generate an API key (starts with "gsk_")
+            <br>4. Replace "PASTE_YOUR_GROQ_API_KEY_HERE" with your actual key
+            <br><br><strong>Example:</strong> const GROQ_API_KEY = "gsk_your_actual_key_here";
+            <br><br>Groq provides lightning-fast AI inference!
+          </p>
+        </div>`;
+        return false;
+    }
+    
+    // Validate API key format
+    if (!GROQ_API_KEY.startsWith('gsk_')) {
+        DOM.aiChatHistory.innerHTML = `<div class="empty">
+          <p>❌ Invalid API Key Format</p>
+          <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-muted);">
+            Groq API keys must start with "gsk_"
+            <br><br>Please check your API key from <a href="https://console.groq.com/keys" target="_blank" style="color: var(--accent);">Groq Console</a>
+          </p>
+        </div>`;
+        return false;
+    }
+    
+    aiInitialized = true;
+    DOM.aiChatHistory.innerHTML = renderAIMessage("Hello! I'm your AI study assistant trained by Akshaj. I can help you with Class VIII subjects like Math, Science, English, History, and Geography. What would you like to study today?", "model");
+    return true;
+  }
+
+  function renderAIMessage(text, role) {
+    const avatar = role === 'user' ? 'You' : 'AI';
+    const formattedText = text
+      .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/\n/g, '<br>');
+    
+    return `<div class="ai-message ${role}">
+      <div class="ai-avatar">${avatar}</div>
+      <div class="ai-message-content">${formattedText}</div>
+    </div>`;
+  }
+
+  async function callGroqAPI(prompt) {
+    try {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${GROQ_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'llama-3.3-70b-versatile', // Updated Llama model
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are an expert study assistant for Class VIII (8th grade) students in India. You help with subjects like Mathematics, Science (Physics, Chemistry, Biology), English, Hindi, Social Science (History, Geography, Civics), Sanskrit, and Computer Science. Your responses should be age-appropriate, educational, and encouraging. Always provide clear explanations with examples. If asked about non-academic topics, politely redirect the conversation back to studies. Format your responses with proper structure using headings, bullet points, and examples where helpful.'
+                    },
+                    {
+                        role: 'user',
+                        content: prompt
+                    }
+                ],
+                max_tokens: 1024,
+                temperature: 0.7,
+                top_p: 1,
+                stream: false
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            const errorMessage = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+            
+            if (response.status === 401) {
+                throw new Error('Invalid Groq API key. Please check your API key.');
+            } else if (response.status === 429) {
+                throw new Error('Rate limit exceeded. Please try again in a moment.');
+            } else if (response.status === 403) {
+                throw new Error('API access denied. Please check your Groq account.');
+            } else {
+                throw new Error(errorMessage);
+            }
+        }
+
+        const data = await response.json();
+        
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+            throw new Error('Unexpected response format from Groq API');
+        }
+        
+        return data.choices[0].message.content;
+        
+    } catch (error) {
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            throw new Error('Network error: Unable to connect to Groq API. Please check your internet connection.');
+        }
+        throw error;
+    }
+  }
+
+  async function runAiPrompt(userPrompt) {
+    if (!await initializeAI()) return;
+    
+    DOM.aiChatHistory.insertAdjacentHTML('beforeend', renderAIMessage(userPrompt, 'user'));
+    DOM.aiChatHistory.scrollTop = DOM.aiChatHistory.scrollHeight;
+    DOM.aiPromptForm.reset();
+    DOM.aiSubmitBtn.disabled = true;
+
+    const loadingId = `loading-${Date.now()}`;
+    const loadingIndicator = `<div class="ai-message model" id="${loadingId}">
+      <div class="ai-avatar">AI</div>
+      <div class="ai-message-content loading-indicator">
+        <span>Thinking with Groq...</span>
+      </div>
+    </div>`;
+    
+    DOM.aiChatHistory.insertAdjacentHTML('beforeend', loadingIndicator);
+    DOM.aiChatHistory.scrollTop = DOM.aiChatHistory.scrollHeight;
+
+    try {
+        const response = await callGroqAPI(userPrompt);
+        document.getElementById(loadingId).outerHTML = renderAIMessage(response, "model");
+    } catch (error) {
+        document.getElementById(loadingId).outerHTML = renderAIMessage(`Sorry, an error occurred: ${error.message}`, "model");
+        showToast("An error occurred with the AI service.", "err");
+    } finally {
+        DOM.aiSubmitBtn.disabled = false;
+        DOM.aiChatHistory.scrollTop = DOM.aiChatHistory.scrollHeight;
+    }
+  }
+  
+  // ========= DATA LOADING LOGIC =========
+  async function loadDashboard() {
+    DOM.homeworkWidget.innerHTML = '<div class="loading">Loading...</div>';
+    DOM.announcementWidget.innerHTML = '<div class="loading">Loading...</div>';
+    
+    try {
+        const [homeworkRes, announcementRes] = await Promise.all([
+            sb.from('homework').select('*').order('due_date', { ascending: true }).limit(3),
+            sb.from('announcements').select('*').order('timestamp', { ascending: false }).limit(1)
+        ]);
+        
+        if (homeworkRes.error) throw new Error(homeworkRes.error.message);
+        
+        DOM.homeworkWidget.innerHTML = homeworkRes.data.length === 0
+            ? '<p class="item-meta">No upcoming homework.</p>'
+            : homeworkRes.data.map(hw => {
+                const dueDate = new Date(hw.due_date);
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                const diffTime = dueDate.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                let dueText;
+                if (diffDays < 0) {
+                  dueText = "Overdue";
+                } else if (diffDays === 0) {
+                  dueText = "Due today";
+                } else if (diffDays === 1) {
+                  dueText = "Due tomorrow";
+                } else {
+                  dueText = `Due in ${diffDays} days`;
+                }
+                
+                return `<div class="homework-item">
+                  <p class="item-title">${escapeHtml(hw.subject)}</p>
+                  <p class="item-due-date">${dueText}</p>
+                </div>`;
+              }).join('');
+        
+        if (announcementRes.error) throw new Error(announcementRes.error.message);
+        
+        DOM.announcementWidget.innerHTML = announcementRes.data.length === 0
+            ? '<p class="item-meta">No recent announcements.</p>'
+            : announcementRes.data.map(ann => {
+                const formattedDate = new Date(ann.timestamp).toLocaleDateString('en-GB');
+                return `<div class="announcement-item">
+                  <p class="item-title">${escapeHtml(ann.subject)}</p>
+                  <p class="item-meta">Posted on ${formattedDate}</p>
+                  <p style="margin-top: 0.5rem;">${escapeHtml(ann.text)}</p>
+                </div>`;
+              }).join('');
+              
+    } catch (error) {
+        showToast(`Failed to load dashboard: ${error.message}`, 'err');
+        DOM.homeworkWidget.innerHTML = '<p class="item-meta">Error loading data.</p>';
+        DOM.announcementWidget.innerHTML = '<p class="item-meta">Error loading data.</p>';
+    }
+  }
+
+  async function loadItems() {
+    DOM.loading.style.display = "block";
+    DOM.empty.style.display = "none";
+    DOM.listView.innerHTML = "";
+    
+    let query = sb.from(currentTab).select("*");
+    
+    const filterText = DOM.filterInput.value.trim().toLowerCase();
+    if (filterText) { 
+      query = query.or(`subject.ilike.%${filterText}%,uploader.ilike.%${filterText}%`); 
+    }
+    
+    const sortOption = DOM.sortSelect.value;
+    if (sortOption === "newest") {
+      query = query.order("timestamp", { ascending: false });
+    } else if (sortOption === "oldest") {
+      query = query.order("timestamp", { ascending: true });
+    } else if (sortOption === "subject") {
+      query = query.order("subject", { ascending: true });
+    }
+    
+    const { data, error } = await query;
+    DOM.loading.style.display = "none";
+    
+    if (error) { 
+      DOM.empty.innerText = `Error: ${error.message}`; 
+      DOM.empty.style.display = "block"; 
+      return; 
+    }
+    
+    if (!data || data.length === 0) { 
+      DOM.empty.innerText = "No entries to display."; 
+      DOM.empty.style.display = "block"; 
+      return; 
+    }
+    
+    DOM.listView.innerHTML = data.map(item => {
+        const formattedDate = new Date(item.timestamp).toLocaleDateString('en-GB', { 
+          day: 'numeric', 
+          month: 'long', 
+          year: 'numeric' 
+        });
+        
+        const attachments = (item.attachments || []).map(f => ({ 
+          path: f, 
+          name: f.substring(f.indexOf('_') + 1) 
+        }));
+        
+        const filesHtml = attachments.map(f => 
+          `<div class="file-attachment">
+            <a class="file-link" href="${SUPABASE_URL}/storage/v1/object/public/${currentTab}/${f.path}" target="_blank">
+              ${escapeHtml(f.name)}
+            </a>
+            <button class="file-delete-btn ${adminUnlocked ? 'show' : ''}" data-item-id="${item.id}" data-file-path="${f.path}">&times;</button>
+          </div>`
+        ).join("");
+        
+        return `<article class="card">
+          <button class="delete-btn ${adminUnlocked ? 'show' : ''}" data-id="${item.id}">×</button>
+          <header class="card-header">
+            <h2 class="name">${escapeHtml(item.subject)}</h2>
+            <p class="meta">By ${escapeHtml(item.uploader)} on ${formattedDate}</p>
+          </header>
+          <div class="card-content">${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>
+          ${filesHtml ? `<div class="file-list">${filesHtml}</div>` : ""}
+        </article>`;
+    }).join("");
+    
+    DOM.listView.querySelectorAll(".delete-btn").forEach(btn => { 
+      btn.onclick = () => handleDelete(btn.dataset.id); 
+    });
+    
+    DOM.listView.querySelectorAll(".file-delete-btn").forEach(btn => { 
+      btn.onclick = () => handleFileDelete(btn.dataset.itemId, btn.dataset.filePath); 
+    });
+  }
+
+  async function loadTimetable() {
+    const { data, error } = await sb.from("timetable").select("*");
+    
+    if (error) { 
+      showToast("Failed to load timetable.", "err"); 
+      return; 
+    }
+    
+    const byDay = new Map((data || []).map(r => [r.day, r]));
+    const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    
+    DOM.ttRows.innerHTML = DAYS.map(day => {
+        const dayData = byDay.get(day) || {};
+        const cells = [1,2,3,4,5,6].map(n => 
+          `<div class="tcell">
+            <input data-col="period${n}" value="${escapeHtml(dayData[`period${n}`] || '')}" ${!adminUnlocked ? 'disabled' : ''}>
+          </div>`
+        ).join('');
+        
+        return `<div class="timetable-grid trow" data-day="${day}">
+          <div class="tcell"><strong>${day}</strong></div>
+          ${cells}
+        </div>`;
+    }).join('');
+    
+    DOM.saveTTBtn.disabled = !adminUnlocked;
+  }
+  
+  async function handleDelete(id) {
+    if (!adminUnlocked) { 
+      showToast("Admin access required.", "warn"); 
+      return; 
+    }
+    
+    if (!confirm("Permanently delete this entry?")) return;
+    
+    const { error } = await sb.from(currentTab).delete().eq('id', id);
+    
+    if (error) { 
+      showToast(`Deletion failed: ${error.message}`, "err"); 
+    } else { 
+      showToast("Entry deleted.", "ok"); 
+      loadItems(); 
+    }
+  }
+
+  async function handleFileDelete(itemId, filePath) {
+    if (!adminUnlocked) { 
+      showToast("Admin access required.", "warn"); 
+      return; 
+    }
+    
+    const fileName = filePath.substring(filePath.indexOf('_') + 1);
+    if (!confirm(`Delete file: ${fileName}?`)) return;
+    
+    showToast("Deleting file...", "info");
+    
+    const { error: storageError } = await sb.storage.from(currentTab).remove([filePath]);
+    if (storageError) { 
+      showToast(`Storage Error: ${storageError.message}`, "err"); 
+      return; 
+    }
+    
+    const { data, error: fetchError } = await sb.from(currentTab).select('attachments').eq('id', itemId).single();
+    if (fetchError) { 
+      showToast(`DB Fetch Error: ${fetchError.message}`, "err"); 
+      return; 
+    }
+    
+    const updatedAttachments = data.attachments.filter(p => p !== filePath);
+    const { error: updateError } = await sb.from(currentTab).update({ 
+      attachments: updatedAttachments 
+    }).eq('id', itemId);
+    
+    if (updateError) { 
+      showToast(`DB Update Error: ${updateError.message}`, "err"); 
+      return; 
+    }
+    
+    showToast("File deleted.", "ok");
+    loadItems();
+  }
+
+  function resetModal() {
+    DOM.modal.classList.remove("show");
+    DOM.modalOverlay.classList.remove("show");
+    DOM.itemForm.reset();
+    filesToUpload = []; 
+    DOM.fileListPreview.innerHTML = "";
+    DOM.sheetMsg.style.display = "none";
+    DOM.uploadBtn.disabled = false;
+    DOM.uploadBtn.textContent = "Submit";
+  }
+  
+  async function saveTimetable() {
+    if (!adminUnlocked) {
+      showToast("Admin access required.", "warn");
+      return;
+    }
+    
+    DOM.saveTTBtn.disabled = true;
+    DOM.saveTTBtn.textContent = "Saving...";
+    
+    try {
+      const tRows = DOM.ttRows.querySelectorAll('.trow');
+      const updates = [];
+      
+      tRows.forEach(row => {
+        const day = row.dataset.day;
+        const inputs = row.querySelectorAll('input');
+        const periods = {};
+        
+        inputs.forEach((input, index) => {
+          periods[`period${index + 1}`] = input.value.trim();
+        });
+        
+        updates.push({ day, ...periods });
+      });
+      
+      // Delete existing timetable data
+      await sb.from('timetable').delete().neq('day', '');
+      
+      // Insert new data
+      const { error } = await sb.from('timetable').insert(updates);
+      
+      if (error) throw error;
+      
+      showToast("Timetable saved successfully!", "ok");
+      
+    } catch (error) {
+      showToast(`Failed to save timetable: ${error.message}`, "err");
+    } finally {
+      DOM.saveTTBtn.disabled = !adminUnlocked;
+      DOM.saveTTBtn.textContent = "Save Changes";
+    }
+  }
+  
+  function main() {
+      // Populate DOM elements
+      [...document.querySelectorAll('[id]')].forEach(el => DOM[el.id] = el);
+      DOM.modalOverlay = document.querySelector('.modal-overlay');
+      DOM.modal = document.getElementById('sheet');
+      DOM.sidebar = document.querySelector('aside');
+      DOM.mobileNavOverlay = document.getElementById('mobileNavOverlay');
+
+      // Mobile navigation
+      DOM.mobileNavToggle.onclick = () => {
+        DOM.sidebar.classList.toggle('show');
+        DOM.mobileNavOverlay.classList.toggle('show');
+      };
+      
+      DOM.mobileNavOverlay.onclick = () => {
+        DOM.sidebar.classList.remove('show');
+        DOM.mobileNavOverlay.classList.remove('show');
+      };
+      
+      // Close mobile nav when tab is clicked
+      document.querySelectorAll('.nav .tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          DOM.sidebar.classList.remove('show');
+          DOM.mobileNavOverlay.classList.remove('show');
+        });
+      });
+      
+      // Theme toggle
+      DOM.themeToggle.onclick = () => document.documentElement.classList.toggle("dark");
+      
+      // Tab navigation
+      DOM.dashboardTab.onclick = () => switchTab('dashboard');
+      DOM.notesTab.onclick = () => switchTab('notes');
+      DOM.homeworkTab.onclick = () => switchTab('homework');
+      DOM.announcementsTab.onclick = () => switchTab('announcements');
+      DOM.timetableTab.onclick = () => switchTab('timetable');
+      DOM.aiTab.onclick = () => switchTab('ai');
+      
+      // Admin unlock functionality
+      DOM.unlockBtn.onclick = () => {
+        if (adminUnlocked) {
+            adminUnlocked = false;
+            DOM.unlockBtn.textContent = "Admin";
+            DOM.unlockPanel.classList.remove("show");
+            showToast("Admin logged out.");
+            if(currentTab === 'timetable') loadTimetable();
+            else if(['notes', 'homework', 'announcements'].includes(currentTab)) loadItems();
+        } else {
+            DOM.unlockBtn.style.display = 'none';
+            DOM.unlockPanel.classList.add("show");
+            DOM.unlockPw.focus();
+        }
+      };
+      
+      DOM.unlockConfirm.onclick = () => {
+        if (DOM.unlockPw.value.trim() === PASSWORD) {
+            adminUnlocked = true;
+            DOM.unlockBtn.textContent = "Admin Active";
+            DOM.unlockBtn.style.display = 'inline-block';
+            DOM.unlockPanel.classList.remove("show");
+            DOM.unlockPw.value = "";
+            showToast("Admin login successful.", "ok");
+            if(currentTab === 'timetable') loadTimetable();
+            else if(['notes', 'homework', 'announcements'].includes(currentTab)) loadItems();
+        } else {
+            showToast("Incorrect password.", "err");
+        }
+      };
+      
+      DOM.unlockPw.addEventListener('keyup', (e) => { 
+        if (e.key === 'Enter') DOM.unlockConfirm.click(); 
+      });
+
+      // Modal functionality
+      DOM.newEntryBtn.onclick = () => {
+          DOM.modal.classList.add("show");
+          DOM.modalOverlay.classList.add("show");
+          DOM.sheetTitle.textContent = `New ${currentTab.charAt(0).toUpperCase() + currentTab.slice(1)}`;
+          
+          const groups = {
+              uploaderGroup: ['notes', 'homework'], 
+              subjectGroup: ['notes', 'homework'],
+              postTextGroup: ['notes', 'homework'], 
+              dueDateGroup: ['homework'],
+              announcementTextGroup: ['announcements'], 
+              fileInputGroup: ['notes', 'homework'],
+              passwordGroup: ['homework', 'announcements']
+          };
+          
+          document.querySelectorAll("#formGroupsContainer .form-group").forEach(el => {
+            el.style.display = 'none';
+          });
+          
+          for (const [group, tabs] of Object.entries(groups)) {
+              if(DOM[group] && tabs.includes(currentTab)) {
+                DOM[group].style.display = 'block';
+              }
+          }
+      };
+      
+      DOM.cancelBtn.onclick = resetModal;
+      DOM.modalOverlay.onclick = resetModal;
+      
+      DOM.uploadBtn.onclick = async () => {
+        DOM.sheetMsg.style.display = "none";
+        DOM.uploadBtn.disabled = true;
+        DOM.uploadBtn.textContent = "Submitting...";
+        
+        try {
+            const uploader = DOM.uploader.value.trim();
+            const isAnnounce = currentTab === "announcements";
+            const subject = isAnnounce ? "Announcement" : DOM.subject.value.trim();
+            const text = isAnnounce ? DOM.announcementText.value.trim() : DOM.postText.value.trim();
+            const pw = DOM.password.value.trim();
+            const dueDate = DOM.dueDate.value;
+            
+            if (!uploader && !isAnnounce) throw new Error("Author is required.");
+            if (!subject && !isAnnounce) throw new Error("Subject is required.");
+            if (!text) throw new Error("Content is required.");
+            if ((currentTab === "homework" || isAnnounce) && pw !== PASSWORD) {
+              throw new Error("Incorrect admin password.");
+            }
+            
+            let uploadedFilePaths = [];
+            if (filesToUpload.length > 0) {
+                for (const file of filesToUpload) {
+                    const filePath = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+                    const { error } = await sb.storage.from(currentTab).upload(filePath, file);
+                    if (error) throw new Error(`Upload Error: ${error.message}`);
+                    uploadedFilePaths.push(filePath);
+                }
+            }
+            
+            const payload = { 
+              uploader: isAnnounce ? 'Admin' : uploader, 
+              subject, 
+              text, 
+              attachments: uploadedFilePaths, 
+              timestamp: new Date().toISOString() 
+            };
+            
+            if (currentTab === 'homework' && dueDate) {
+              payload.due_date = dueDate;
+            }
+
+            const { error } = await sb.from(currentTab).insert([payload]);
+            if (error) throw error;
+            
+            showToast("Entry submitted.", "ok");
+            loadItems();
+            resetModal();
+            
+        } catch (err) {
+            DOM.sheetMsg.textContent = err.message;
+            DOM.sheetMsg.style.display = 'block';
+            showToast(err.message, 'err');
+        } finally {
+            DOM.uploadBtn.disabled = false;
+            DOM.uploadBtn.textContent = "Submit";
+        }
+      };
+
+      // File handling
+      DOM.fileSelectBtn.onclick = () => DOM.file.click();
+      DOM.file.onchange = () => {
+          filesToUpload = Array.from(DOM.file.files);
+          DOM.fileListPreview.textContent = filesToUpload.length > 0 ? 
+            `Selected: ${filesToUpload.length} file(s)` : "";
+      };
+
+      // Timetable save functionality
+      DOM.saveTTBtn.onclick = saveTimetable;
+
+      // AI form handling
+      DOM.aiPromptForm.onsubmit = (e) => {
+          e.preventDefault();
+          const prompt = DOM.aiPromptInput.value.trim();
+          if (prompt) { 
+            runAiPrompt(prompt); 
+          }
+      };
+      
+      // Filter and sort functionality
+      DOM.filterInput.addEventListener('input', () => {
+        if (['notes', 'homework', 'announcements'].includes(currentTab)) {
+          loadItems();
+        }
+      });
+      
+      DOM.sortSelect.addEventListener('change', () => {
+        if (['notes', 'homework', 'announcements'].includes(currentTab)) {
+          loadItems();
+        }
+      });
+      
+      // Set current date
+      DOM.currentDate.textContent = new Date().toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      
+      // Initialize with dashboard
+      switchTab("dashboard");
+  }
+
+  document.addEventListener('DOMContentLoaded', main);
+</script>
+</body>
+</html>
