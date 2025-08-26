@@ -275,7 +275,7 @@ textarea { min-height: 120px; resize: vertical; }
   const SUPABASE_URL = "https://dzlejyetwcevmikfqilx.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6bGVqeWV0d2Nldm1pa2ZxaWx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUyNjY0ODAsImV4cCI6MjA3MDg0MjQ4MH0.YsYdEwCH_jyrJs0iTVn0jXOfKYGPA8lpOUoBotBRYYk";
   const PASSWORD = "gurukul@123";
-  const GROQ_API_KEY = "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"; // Replace with your Groq API key
+  const GROQ_API_KEY = "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"; // Replace with your Groq API key
 
   // ========= INITIALIZATION =========
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -419,11 +419,11 @@ textarea { min-height: 120px; resize: vertical; }
             const errorMessage = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
             
             if (response.status === 401) {
-                throw new Error('Invalid Groq API key. Please check your API key.');
+                throw new Error('Invalid Akshaj Database key. Please check your API key.');
             } else if (response.status === 429) {
                 throw new Error('Rate limit exceeded. Please try again in a moment.');
             } else if (response.status === 403) {
-                throw new Error('API access denied. Please check your Groq account.');
+                throw new Error('API access denied. Please contact Akshaj.');
             } else {
                 throw new Error(errorMessage);
             }
@@ -439,7 +439,7 @@ textarea { min-height: 120px; resize: vertical; }
         
     } catch (error) {
         if (error.name === 'TypeError' && error.message.includes('fetch')) {
-            throw new Error('Network error: Unable to connect to Groq API. Please check your internet connection.');
+            throw new Error('Network error: Unable to connect to Akshaj API. Please check your internet connection.');
         }
         throw error;
     }
@@ -457,7 +457,7 @@ textarea { min-height: 120px; resize: vertical; }
     const loadingIndicator = `<div class="ai-message model" id="${loadingId}">
       <div class="ai-avatar">AI</div>
       <div class="ai-message-content loading-indicator">
-        <span>Thinking with Groq...</span>
+        <span>Searching Akshaj's Database....</span>
       </div>
     </div>`;
     
